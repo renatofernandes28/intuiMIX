@@ -1,0 +1,518 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width">
+
+    <title>Compressor example</title>
+
+    <link rel="stylesheet" href="">
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <h1>Compressor example</h1>
+    <audio id="audio1">  
+      <source src="MainVerse.mp3" type="audio/mp3">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <audio id="audio2">  
+      <source src="BackingVerse.mp3" type="audio/mp3">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <audio id="audio3">  
+      <source src="Beat.mp3" type="audio/mp3">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <audio id="audio4">  
+      <source src="VerseAdLibs.wav" type="audio/wav">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <select id="select1">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <select id="select2">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <select id="select3">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <button id="1" data-active="false">Add compression</button>
+    <button id="2" data-active="false">Play/Pause</button>
+    <button id="3" data-active="false">Download</button>
+    <!-- <button onclick="option1()">Add compression</button> -->
+    <pre></pre>
+  </body>
+<script type="text/javascript" src="tuna/tuna-min.js"></script>
+<script type="text/javascript" src="Recorderjs/recorder.js"></script>
+<script type="text/javascript">
+var AudioContext = window.AudioContext || window.webkitAudioContext;
+var audioCtx = new AudioContext();
+var offlineCtx = new OfflineAudioContext(2,44100*40,44100);
+var tuna = new Tuna(audioCtx);
+var mainVerse = document.getElementById('audio1');
+var backingVerse = document.getElementById('audio2');
+var beat = document.getElementById('audio3');
+var verse_adlib = document.getElementById('audio4');
+var pre = document.querySelector('pre');
+var myScript = document.querySelector('script');
+var button = document.getElementById('1');
+var cbutton = document.getElementById('2');
+var dbutton = document.getElementById('3');
+
+var audios = [];
+var loading = 0;
+
+var rec;
+
+//AddNote("MainVerse.mp3", true);
+//AddNote("MainVerse.mp3", true);
+
+mainVerse.play();
+//r.play();
+backingVerse.play();
+beat.play();
+// verse_adlib.play();
+
+var select1 = document.getElementById('select1');
+var select2 = document.getElementById('select2');
+var select3 = document.getElementById('select3');
+
+
+
+//pre.innerHTML = myScript.innerHTML;
+// Create a MediaElementAudioSourceNode
+// Feed the HTMLMediaElement into it
+var source = audioCtx.createMediaElementSource(mainVerse);
+var osource = offlineCtx.createBufferSource();
+var backingVerse_source = audioCtx.createMediaElementSource(backingVerse);
+var beat_source = audioCtx.createMediaElementSource(beat);
+// Create a compressor node
+var compressor = audioCtx.createDynamicsCompressor();
+var analyser = audioCtx.createAnalyser();
+var distortion = audioCtx.createWaveShaper();
+var gainNode = audioCtx.createGain();
+var mainNode = audioCtx.createGain();
+var biquadFilter = audioCtx.createBiquadFilter();
+var biquadFilter2 = audioCtx.createBiquadFilter();
+var biquadFilter3 = audioCtx.createBiquadFilter();
+var biquadFilter4 = audioCtx.createBiquadFilter();
+var biquadFilter5 = audioCtx.createBiquadFilter();
+var biquadFilter6 = audioCtx.createBiquadFilter();
+var biquadFilter7 = audioCtx.createBiquadFilter();
+var convolver = audioCtx.createConvolver();
+
+function getData() {
+  request = new XMLHttpRequest();
+  request.open('GET', 'Beat.mp3', true);
+  request.responseType = 'arraybuffer';
+  request.onload = function() {
+    var audioData = request.response;
+    audioCtx.decodeAudioData(audioData, function(buffer) {
+      myBuffer = buffer;
+      osource.buffer = myBuffer;
+      osource.connect(offlineCtx.destination);
+      osource.start();
+      //source.loop = true;
+      offlineCtx.startRendering().then(function(renderedBuffer) {
+        console.log('Rendering completed successfully');
+        var audioCtx1 = new (window.AudioContext || window.webkitAudioContext)(); 
+        var song = audioCtx1.createBufferSource();
+        song.buffer = renderedBuffer;
+        song.connect(audioCtx1.destination);
+        song.start();
+        rec = new Recorder(song, {
+      		workerPath: 'Recorderjs/recorderWorker.js'
+    	});   
+    
+    	rec.exportWAV(function(e){
+        	rec.clear();
+    		Recorder.forceDownload(e, "filename.wav");
+    	});
+      }).catch(function(err) {
+          console.log('Rendering failed: ' + err);
+          // Note: The promise should reject when startRendering is called a second time on an OfflineAudioContext
+      });
+    });
+  }
+  request.send();
+}
+// Run getData to start the process off
+//getData();
+
+
+var par_delay = new tuna.Delay({
+    feedback: 0.6,    //0 to 1+
+    delayTime: 200,    //how many milliseconds should the wet signal be delayed?
+    wetLevel: 0.3,    //0 to 1+
+    dryLevel: 0,       //0 to 1+
+    bypass: 0
+});
+ 
+var comp = new tuna.Compressor({
+    threshold: -21,    //-100 to 0
+    makeupGain: 0,     //0 and up
+    attack: 10,         //0 to 1000
+    release: 48,        //0 to 3000
+    ratio: 2.5,          //1 to 20
+    knee: 28,           //0 to 40
+    automakeup: false,  //true/false
+    bypass: 0
+});
+
+var chorus = new tuna.Chorus({
+    rate: 1.5,         //0.01 to 8+
+    feedback: 0.2,     //0 to 1+
+    delay: 0.0045,     //0 to 1
+    bypass: 0          //the value 1 starts the effect as bypassed, 0 or 1
+});
+
+var conv = new tuna.Convolver({
+    highCut: 22050,                         //20 to 22050
+    lowCut: 20,                             //20 to 22050
+    dryLevel: 0.86,                            //0 to 1+
+    wetLevel: 0.14,                            //0 to 1+
+    level: 1,                               //0 to 1+, adjusts total output of both wet and dry
+    impulse: "impulses/matrix-reverb1.wav",    //the path to your impulse response
+    bypass: 0
+});
+
+
+compressor.threshold.value = -21;
+compressor.knee.value = 28;
+compressor.ratio.value = 2.5;
+compressor.attack.value = 0.01;
+compressor.release.value = 0.048;
+
+gainNode.gain.value =  1.584893;
+
+var sEQ1 = new tuna.Filter({
+    frequency: 152,
+    Q: 1.1,
+    gain: -15.5,
+    filterType: "lowshelf",
+    bypass: 0
+});
+
+var aEQ1a = new tuna.Filter({
+    frequency: 118,
+    Q: 1.1,
+    gain: 6,
+    filterType: "lowshelf",
+    bypass: 0
+});
+
+var aEQ1b = new tuna.Filter({
+    frequency: 1000,
+    Q: 0.71,
+    gain: -1.5,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+var aEQ1c = new tuna.Filter({
+    frequency: 3550,
+    Q: 0.71,
+    gain: 2.5,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+var aEQ1d = new tuna.Filter({
+    frequency: 8200,
+    Q: 0.71,
+    gain: 7.5,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+var cEQ1a = new tuna.Filter({
+    frequency: 3900,
+    Q: 0.74,
+    gain: 4.5,
+    filterType: "allpass",
+    bypass: 0
+});
+
+var cEQ1b = new tuna.Filter({
+    frequency: 10000,
+    Q: 3,
+    gain: -10,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+
+var bbiquadFilter = audioCtx.createBiquadFilter();
+var bgainNode1 = audioCtx.createGain();
+var bgainNode2 = audioCtx.createGain();
+var bcompressor = audioCtx.createDynamicsCompressor();
+var bbiquadFilter1 = audioCtx.createBiquadFilter();
+
+bbiquadFilter.type = "lowshelf";
+bbiquadFilter.frequency.value = 560;
+bbiquadFilter.gain.value = -16.5;
+
+bcompressor.threshold.value = -19.5;
+bcompressor.knee.value = 28;
+bcompressor.ratio.value = 6.8;
+bcompressor.attack.value = 0.01;
+bcompressor.release.value = 0.048;
+
+// Gainnode db calculation is 10^(db_value/20)
+bgainNode1.gain.value =  2.37137;
+
+
+
+
+bbiquadFilter1.type = "highshelf";
+bbiquadFilter1.frequency.value = 4400;
+// bbiquadFilter1.Q.value = 35.5;
+bbiquadFilter1.gain.value = 11;
+
+bgainNode2.gain.value =  0.045;
+
+mainNode.gain.value = 1;
+
+
+var sbiquadFilter = audioCtx.createBiquadFilter();
+var sgainNode1 = audioCtx.createGain();
+var par_gain1 = audioCtx.createGain();
+var scompressor = audioCtx.createDynamicsCompressor();
+var sdelay = audioCtx.createDelay();
+
+var par_aEQ1 = new tuna.Filter({
+    frequency: 124,
+    Q: 1.1,
+    gain: 17,
+    filterType: "lowshelf",
+    bypass: 0
+});
+
+var par_comp1 = new tuna.Compressor({
+    threshold: -22,    //-100 to 0
+    makeupGain: 0,     //0 and up
+    attack: 10,         //0 to 1000
+    release: 48,        //0 to 3000
+    ratio: 3.1,          //1 to 20
+    knee: 28,           //0 to 40
+    automakeup: false,  //true/false
+    bypass: 0
+});
+
+scompressor.threshold.value = -22;
+scompressor.knee.value = 28;
+scompressor.ratio.value = 3;
+scompressor.attack.value = 0.01;
+scompressor.release.value = 0.048;
+
+
+sgainNode1.gain.value =  1.58489319;
+
+par_gain1.gain.value =  0.229087;
+
+sdelay.delayTime.value = 0;
+
+
+
+var key = function(src, obj1, obj2, obj3){
+  // some unique object-dependent key
+  return src + obj1.value + obj2.value + obj3.value; // just an example
+};
+
+var dict = {};
+var currFilters = [];
+
+dict[key(mainVerse.currentSrc, select1.options[0], select2.options[0], select3.options[0])] = [sEQ1, comp, aEQ1a, aEQ1b, aEQ1c, aEQ1d, conv, cEQ1a, cEQ1b];
+
+dict[key(mainVerse.currentSrc, select1.options[0], select2.options[0], select3.options[1])] = [sEQ1, par_comp1, par_aEQ1, par_delay, par_gain1];
+
+dict[key(backingVerse.currentSrc, select1.options[0], select2.options[0], select3.options[0])] = [conv, compressor];
+
+
+// connect the AudioBufferSourceNode to the destination
+source.connect(audioCtx.destination);
+backingVerse_source.connect(audioCtx.destination);
+beat_source.connect(audioCtx.destination);
+//backingVerse_source.disconnect(audioCtx.destination);
+//backingVerse_source.connect(conv.input);
+//conv.connect(audioCtx.destination);
+
+button.onclick = function() {
+  var active = button.getAttribute('data-active');
+  if(active == 'false') {
+    var filters = dict[key(mainVerse.currentSrc, select1.options[select1.selectedIndex], select2.options[select2.selectedIndex], select3.options[select3.selectedIndex])];
+    var filters2 = dict[key(backingVerse.currentSrc, select1.options[select1.selectedIndex], select2.options[select2.selectedIndex], select3.options[select3.selectedIndex])];
+    var filters3 = dict[key(mainVerse.currentSrc, select1.options[0], select2.options[0], select3.options[1])];
+    
+    
+
+    if(currFilters.length > 0){
+      disconnectAll(source, currFilters);
+      disconnectAll(backingVerse_source, currFilters);
+    }
+
+    var s = source;
+    var s2 = source;
+    var hs = backingVerse_source;
+    var bs = beat_source;
+    source.disconnect(audioCtx.destination);
+    backingVerse_source.disconnect(audioCtx.destination);
+    beat_source.disconnect(audioCtx.destination);
+    
+    
+    for (var i in filters) {
+     if(Object.keys(filters[i]).length > 0){
+        s.connect(filters[i].input);
+     }
+     else{
+        s.connect(filters[i]);
+     }
+     s = filters[i];
+    }
+    
+    for (var i in filters2) {
+     if(Object.keys(filters2[i]).length > 0){
+          hs.connect(filters2[i].input);
+     }
+     else{
+          hs.connect(filters2[i]);
+     }
+     hs = filters2[i];
+    }
+    
+    for (var i in filters3) {
+     if(Object.keys(filters3[i]).length > 0){
+          s2.connect(filters3[i].input);
+     }
+     else{
+          s2.connect(filters3[i]);
+     }
+     s2 = filters3[i];
+    }
+    
+    s.connect(audioCtx.destination);
+    s2.connect(audioCtx.destination);
+    hs.connect(audioCtx.destination);
+    bs.connect(audioCtx.destination);
+    
+    s.connect(mainNode);
+    s2.connect(mainNode);
+    hs.connect(mainNode);
+    bs.connect(mainNode);
+    //mainNode.connect(audioCtx.destination);
+    
+    
+    
+    
+    rec = new Recorder(mainNode, {
+      	workerPath: 'Recorderjs/recorderWorker.js'
+    });   
+      
+    rec.record();
+    
+    
+    currFilters = filters;
+    
+  }
+}
+
+function disconnectAll(src, filters){
+  for (var i in filters) {
+     filters[i].disconnect();
+  }
+  src.disconnect();
+  src.connect(audioCtx.destination);
+}
+
+cbutton.onclick = function() {
+  var active = cbutton.getAttribute('data-active');
+  if(active == 'false') {
+    cbutton.setAttribute('data-active', 'true');
+    mainVerse.pause();
+   // backingVerse.pause();
+   //beat.pause();
+   // verse_adlib.play();
+  } else if(active == 'true') {
+    cbutton.setAttribute('data-active', 'false');
+     mainVerse.play();
+   // backingVerse.play();
+   //beat.play();
+   // verse_adlib.play();
+  }
+}
+
+dbutton.onclick = function() {
+   
+  rec.stop();
+
+  
+  rec.exportWAV(function(e){
+    rec.clear();
+    Recorder.forceDownload(e, "test.wav");
+  });
+}
+
+
+function option1(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+   source.disconnect(audioCtx.destination);
+   source.connect(compressor);
+   compressor.connect(audioCtx.destination);
+}
+
+function option2(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+   source.disconnect(audioCtx.destination);
+   source.connect(biquadFilter);
+   biquadFilter.connect(audioCtx.destination);
+}
+
+function option3(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+}
+
+function option4(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+}
+
+
+function AddNote(name, ifmute) {
+    loading++;
+    var audio = document.createElement("audio");
+    audio.addEventListener("canplaythrough", function () {
+        loading--;
+        if (loading == 0) // All files are preloaded
+            StartPlayingAll();
+        }, false);
+//    audio.addEventListener('timeupdate', function(){
+//           var buffer = .44
+//                if(this.currentTime > this.duration - buffer){
+//                    this.currentTime = 0;
+//                    this.play();
+//                }}, false);
+    audio.src = name;
+    audios.push(audio);
+
+}
+
+function StartPlayingAll() {
+    // audio[3].muted = !audios[3].muted;
+    // audio[4].muted = !audios[3].muted;
+
+    for (var i = 0; i < audios.length; i++){
+        audios[i].play();
+      }
+    loading = 0;
+
+}
+  </script>
+
+</html>

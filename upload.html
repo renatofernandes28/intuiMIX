@@ -1,0 +1,76 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width">
+
+    <title>Upload Files</title>
+
+    <link rel="stylesheet" href="">
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <h1>Upload Files</h1>
+
+
+
+
+    <form action="upload.php" method="POST" enctype="multipart/form-data">
+    <input id="fileinput1" type="file" name="file1" size="10" accept="audio/*" onchange="fileSelected(this, 0)"></input>
+    <select id="select1">
+  	<option value="mverse">Main Verse</option>
+  	<option value="bverse">Backing Verse</option>
+ 	<option value="beat">Beat</option>
+     </select>   
+     <br>
+  
+    <input id="fileinput2" type="file" name="file2" size="10" accept="audio/*" onchange="fileSelected(this, 1)"></input>
+     <select id="select2">
+  	<option value="mverse">Main Verse</option>
+  	<option value="bverse">Backing Verse</option>
+ 	<option value="beat">Beat</option>
+     </select> 
+    <br>
+    <input id="fileinput3" type="file" name="file3" size="10" accept="audio/*" onchange="fileSelected(this, 2)"></input>
+     <select id="select3">
+  	<option value="mverse">Main Verse</option>
+  	<option value="bverse">Backing Verse</option>
+ 	<option value="beat">Beat</option>
+     </select> 
+     <br>
+    <button id="upload_btn" data-active="false">Upload</button>
+   </form>
+
+
+    <pre></pre>
+  </body>
+  <script type="text/javascript">
+  var pre = document.querySelector('pre');
+  var button = document.getElementById('upload_btn');
+  
+  var select1 = document.getElementById("select1");
+  var select2 = document.getElementById("select2");
+  var select3 = document.getElementById("select3");
+  
+  var selects = [ select1, select2, select3 ];
+
+  var files = {};
+
+
+  button.onclick = function() {
+    sessionStorage.myValue = "";
+    for(var i in selects){
+      var s = selects[i];
+      sessionStorage.myValue += s.options[s.selectedIndex].value + ':' + files[i] + '|';
+    }
+  }
+    
+  
+
+  function fileSelected(filelist, id){
+     files[id] = filelist.files[0].name;
+  }
+  </script>
+  </html>

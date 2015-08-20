@@ -1,0 +1,605 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width">
+
+    <title>Compressor example</title>
+
+    <link rel="stylesheet" href="">
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <h1>Compressor example</h1>
+    <audio id="audio1">  
+      <source src="MainVerse.mp3" preload="auto" type="audio/mp3">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <audio id="audio2">  
+      <source src="BackingVerse.mp3" preload="auto" type="audio/mp3">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <audio id="audio3">  
+      <source src="Beat.mp3" preload="auto" type="audio/mp3">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <audio id="audio4">  
+      <source src="VerseAdLibs.wav" type="audio/wav">   
+      <p>Browser too old to support HTML5 audio? How depressing!</p>
+    </audio>
+    <select id="select1">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <select id="select2">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <select id="select3">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <button id="1" data-active="false">Add compression</button>
+    <button id="2" data-active="false">Play/Pause</button>
+    <button id="3" data-active="false">Download</button>
+    <!-- <button onclick="option1()">Add compression</button> -->
+    <pre></pre>
+  </body>
+<script type="text/javascript" src="tuna/tuna-min.js"></script>
+<script type="text/javascript" src="Recorderjs/recorder.js"></script>
+<script type="text/javascript">
+var AudioContext = window.AudioContext || window.webkitAudioContext;
+var audioCtx = new AudioContext();
+var offlineCtx = new OfflineAudioContext(2,94100*40,94100);
+var tuna = new Tuna(audioCtx);
+var mainVerse = document.getElementById('audio1');
+var backingVerse = document.getElementById('audio2');
+var beat = document.getElementById('audio3');
+var verse_adlib = document.getElementById('audio4');
+var pre = document.querySelector('pre');
+var myScript = document.querySelector('script');
+var button = document.getElementById('1');
+var cbutton = document.getElementById('2');
+var dbutton = document.getElementById('3');
+
+var audios = [];
+var paths = [];
+var sources = [];
+var lookup = {};
+var loading = 0;
+
+function BufferLoader(context, urlList, callback) {
+  this.context = context;
+  this.urlList = urlList;
+  this.onload = callback;
+  this.bufferList = new Array();
+  this.loadCount = 0;
+}
+
+BufferLoader.prototype.loadBuffer = function(url, index) {
+  // Load buffer asynchronously
+  var request = new XMLHttpRequest();
+  request.open("GET", url, true);
+  request.responseType = "arraybuffer";
+
+  var loader = this;
+
+  request.onload = function() {
+    // Asynchronously decode the audio file data in request.response
+    loader.context.decodeAudioData(
+      request.response,
+      function(buffer) {
+        if (!buffer) {
+          alert('error decoding file data: ' + url);
+          return;
+        }
+        loader.bufferList[index] = buffer;
+        if (++loader.loadCount == loader.urlList.length)
+          loader.onload(loader.bufferList);
+      },
+      function(error) {
+        console.error('decodeAudioData error', error);
+      }
+    );
+  }
+
+  request.onerror = function() {
+    alert('BufferLoader: XHR error');
+  }
+
+  request.send();
+}
+
+BufferLoader.prototype.load = function() {
+  for (var i = 0; i < this.urlList.length; ++i)
+  this.loadBuffer(this.urlList[i], i);
+}
+
+var tokens; 
+
+if(sessionStorage.myValue){
+    tokens = sessionStorage.myValue.split("|");
+}
+
+for(var i in tokens){
+  var tuple = tokens[i].split(":");
+  var type = tuple[0];
+  var path = tuple[1];
+  
+  if(type === "mverse"){
+   //mainVerse.src = "uploads/" + path;
+   paths.push("uploads/" + path);
+   lookup["uploads/" + path] = type;
+   //AddNote(mainVerse);
+   console.log(mainVerse.src);
+  }
+  
+  if(type === "bverse"){
+    //backingVerse.src = "uploads/" + path;
+    //AddNote(backingVerse);
+    paths.push("uploads/" + path);
+    lookup["uploads/" + path] = type;
+    console.log(backingVerse.src);
+  }
+  
+  if(type === "beat"){
+   //beat.src = "uploads/" + path;
+   //AddNote(beat);
+   paths.push("uploads/" + path);
+   lookup["uploads/" + path] = type;
+   console.log(beat.src);
+  }
+  
+}
+var rec;
+
+//AddNote("MainVerse.mp3", true);
+//AddNote("BackingVerse.mp3", true);
+//AddNote("Beat.mp3", true);
+
+//paths.push("MainVerse.mp3");
+//lookup["MainVerse.mp3"] = "mverse";
+//paths.push("BackingVerse.mp3");
+//lookup["BackingVerse.mp3"] = "bverse";
+//paths.push("Beat.mp3");
+//lookup["Beat.mp3"] = "beat";
+
+//mainVerse.play();
+//r.play();
+//backingVerse.play();
+//beat.play();
+// verse_adlib.play();
+
+var bufferLoader = new BufferLoader(audioCtx, paths, finishedLoading);
+bufferLoader.load();
+
+for(var i in paths){
+  var temp = audioCtx.createBufferSource();
+  sources.push(temp);
+}
+
+  
+function finishedLoading(bufferList) {
+  // Create two sources and play them both together.
+  
+  for(var i in sources){
+    sources[i].buffer = bufferList[i];
+    sources[i].connect(audioCtx.destination);
+    sources[i].start(0); 
+  }
+}
+
+var select1 = document.getElementById('select1');
+var select2 = document.getElementById('select2');
+var select3 = document.getElementById('select3');
+
+
+
+//pre.innerHTML = myScript.innerHTML;
+// Create a MediaElementAudioSourceNode
+// Feed the HTMLMediaElement into it
+var source = audioCtx.createMediaElementSource(mainVerse);
+var backingVerse_source = audioCtx.createMediaElementSource(backingVerse);
+var beat_source = audioCtx.createMediaElementSource(beat);
+
+var par_gain1 = audioCtx.createGain();
+var mainNode = audioCtx.createGain();
+
+
+function getData(path) {
+  loading++;
+  request = new XMLHttpRequest();
+  request.open('GET', path, true);
+  request.responseType = 'arraybuffer';
+  request.onload = function() {
+    var audioData = request.response;
+    audioCtx.decodeAudioData(audioData, function(buffer) {
+      var osource = offlineCtx.createBufferSource();
+      myBuffer = buffer;
+      osource.buffer = myBuffer;
+      rec = new Recorder(osource, {
+      		workerPath: 'Recorderjs/recorderWorker.js'
+      });
+      osource.connect(offlineCtx.destination);
+      osource.start();
+      rec.record();
+      //source.loop = true;
+      offlineCtx.startRendering().then(function(renderedBuffer) {
+        console.log('Rendering completed successfully');
+        var audioCtx1 = new (window.AudioContext || window.webkitAudioContext)(); 
+        var song = audioCtx1.createBufferSource();
+        song.buffer = renderedBuffer;
+        song.connect(audioCtx1.destination);
+        loading--;
+        audios.push(song);
+        if(loading == 0){
+          StartPlayingAll();
+        }
+    
+        rec.stop();
+    	rec.exportWAV(function(e){
+        	rec.clear();
+    		//Recorder.forceDownload(e, "filename.wav");
+    	});
+      }).catch(function(err) {
+          console.log('Rendering failed: ' + err);
+          // Note: The promise should reject when startRendering is called a second time on an OfflineAudioContext
+      });
+    });
+  }
+  request.send();
+}
+// Run getData to start the process off
+//getData();
+
+
+var par_delay = new tuna.Delay({
+    feedback: 0.6,    //0 to 1+
+    delayTime: 200,    //how many milliseconds should the wet signal be delayed?
+    wetLevel: 0.3,    //0 to 1+
+    dryLevel: 0,       //0 to 1+
+    bypass: 0
+});
+ 
+var comp = new tuna.Compressor({
+    threshold: -21,    //-100 to 0
+    makeupGain: 0,     //0 and up
+    attack: 10,         //0 to 1000
+    release: 48,        //0 to 3000
+    ratio: 2.5,          //1 to 20
+    knee: 28,           //0 to 40
+    automakeup: false,  //true/false
+    bypass: 0
+});
+
+var chorus = new tuna.Chorus({
+    rate: 1.5,         //0.01 to 8+
+    feedback: 0.2,     //0 to 1+
+    delay: 0.0045,     //0 to 1
+    bypass: 0          //the value 1 starts the effect as bypassed, 0 or 1
+});
+
+var conv = new tuna.Convolver({
+    highCut: 22050,                         //20 to 22050
+    lowCut: 20,                             //20 to 22050
+    dryLevel: 0.86,                            //0 to 1+
+    wetLevel: 0.14,                            //0 to 1+
+    level: 1,                               //0 to 1+, adjusts total output of both wet and dry
+    impulse: "impulses/matrix-reverb1.wav",    //the path to your impulse response
+    bypass: 0
+});
+
+
+
+var sEQ1 = new tuna.Filter({
+    frequency: 152,
+    Q: 1.1,
+    gain: -15.5,
+    filterType: "lowshelf",
+    bypass: 0
+});
+
+var aEQ1a = new tuna.Filter({
+    frequency: 118,
+    Q: 1.1,
+    gain: 6,
+    filterType: "lowshelf",
+    bypass: 0
+});
+
+var aEQ1b = new tuna.Filter({
+    frequency: 1000,
+    Q: 0.71,
+    gain: -1.5,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+var aEQ1c = new tuna.Filter({
+    frequency: 3550,
+    Q: 0.71,
+    gain: 2.5,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+var aEQ1d = new tuna.Filter({
+    frequency: 8200,
+    Q: 0.71,
+    gain: 7.5,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+var cEQ1a = new tuna.Filter({
+    frequency: 3900,
+    Q: 0.74,
+    gain: 4.5,
+    filterType: "allpass",
+    bypass: 0
+});
+
+var cEQ1b = new tuna.Filter({
+    frequency: 10000,
+    Q: 3,
+    gain: -10,
+    filterType: "highshelf",
+    bypass: 0
+});
+
+
+
+// Gainnode db calculation is 10^(db_value/20)
+
+mainNode.gain.value = 1;
+
+var par_aEQ1 = new tuna.Filter({
+    frequency: 124,
+    Q: 1.1,
+    gain: 17,
+    filterType: "lowshelf",
+    bypass: 0
+});
+
+var par_comp1 = new tuna.Compressor({
+    threshold: -22,    //-100 to 0
+    makeupGain: 0,     //0 and up
+    attack: 10,         //0 to 1000
+    release: 48,        //0 to 3000
+    ratio: 3.1,          //1 to 20
+    knee: 28,           //0 to 40
+    automakeup: false,  //true/false
+    bypass: 0
+});
+
+
+par_gain1.gain.value =  0.229087;
+
+
+
+
+var key = function(src, obj1, obj2, obj3){
+  // some unique object-dependent key
+  return src + obj1.value + obj2.value + obj3.value; // just an example
+};
+
+var dict = {};
+var currFilters = [];
+
+dict[key(mainVerse.currentSrc, select1.options[0], select2.options[0], select3.options[0])] = [sEQ1, comp, aEQ1a, aEQ1b, aEQ1c, aEQ1d, conv, cEQ1a, cEQ1b];
+
+dict[key(mainVerse.currentSrc, select1.options[0], select2.options[0], select3.options[1])] = [sEQ1, par_comp1, par_aEQ1, par_delay, par_gain1];
+
+dict[key(backingVerse.currentSrc, select1.options[0], select2.options[0], select3.options[0])] = [par_delay];
+
+
+// connect the AudioBufferSourceNode to the destination
+//source.connect(audioCtx.destination);
+//backingVerse_source.connect(audioCtx.destination);
+//beat_source.connect(audioCtx.destination);
+//backingVerse_source.disconnect(audioCtx.destination);
+//backingVerse_source.connect(conv.input);
+//conv.connect(audioCtx.destination);
+
+button.onclick = function() {
+  var active = button.getAttribute('data-active');
+  if(active == 'false') {
+ var filters = dict[key(mainVerse.currentSrc, select1.options[select1.selectedIndex], select2.options[select2.selectedIndex], select3.options[select3.selectedIndex])];
+    var filters2 = dict[key(backingVerse.currentSrc, select1.options[select1.selectedIndex], select2.options[select2.selectedIndex], select3.options[select3.selectedIndex])];
+    var filters3 = dict[key(mainVerse.currentSrc, select1.options[0], select2.options[0], select3.options[1])];
+    
+    
+    var tempSources = {};
+    //var s = source1;
+    //var s2 = source1;
+    //var hs = source2;
+    //var bs = source3;
+    
+     
+    
+    
+    for(var i in paths){
+      if(lookup[paths[i]] === "mverse"){
+        var s = sources[i];
+        var s2 = sources[i];
+        tempSources["m1"] = s;
+        tempSources["m2"] = s2;
+      }
+      else if(lookup[paths[i]] === "bverse"){
+        var s = sources[i];
+        tempSources["b1"] = s;
+      }
+      else{
+        var s = sources[i];
+        tempSources["be1"] = s;
+      }
+    }
+    
+     for(var i in sources){
+       sources[i].disconnect(audioCtx.destination);
+    }
+   
+     
+          
+ 
+    for (var i in filters) {
+     console.log(filters);
+     console.log(tempSources);
+     if(Object.keys(filters[i]).length > 0){
+        tempSources["m1"].connect(filters[i].input);
+     }
+     else{
+        tempSources["m1"].connect(filters[i]);
+     }
+     tempSources["m1"] = filters[i];
+    }
+    
+    for (var i in filters2) {
+     if(Object.keys(filters2[i]).length > 0){
+          tempSources["b1"].connect(filters2[i].input);
+     }
+     else{
+          tempSources["b1"].connect(filters2[i]);
+     }
+     tempSources["b1"] = filters2[i];
+    }
+    
+    for (var i in filters3) {
+     if(Object.keys(filters3[i]).length > 0){
+         tempSources["m2"].connect(filters3[i].input);
+     }
+     else{
+          tempSources["m2"].connect(filters3[i]);
+     }
+     tempSources["m2"] = filters3[i];
+    }
+    
+     
+    for(var k in tempSources){ 
+      tempSources[k].connect(audioCtx.destination);
+    }
+
+    for(var k in tempSources){ 
+      tempSources[k].connect(mainNode);
+    }
+
+    
+    rec = new Recorder(mainNode, {
+      	workerPath: 'Recorderjs/recorderWorker.js'
+    });   
+      
+    rec.record();
+    
+  }
+}
+
+function disconnectAll(src, filters){
+  for (var i in filters) {
+     filters[i].disconnect();
+  }
+  src.disconnect();
+  src.connect(audioCtx.destination);
+}
+
+function applyFilters(s, filters){
+   for (var i in filters) {
+     if(Object.keys(filters[i]).length > 0){
+        s.connect(filters[i].input);
+     }
+     else{
+        s.connect(filters[i]);
+     }
+     s = filters[i];
+   }
+}
+
+cbutton.onclick = function() {
+  var active = cbutton.getAttribute('data-active');
+  if(active == 'false') {
+    cbutton.setAttribute('data-active', 'true');
+    mainVerse.pause();
+   // backingVerse.pause();
+   //beat.pause();
+   // verse_adlib.play();
+  } else if(active == 'true') {
+    cbutton.setAttribute('data-active', 'false');
+     mainVerse.play();
+   // backingVerse.play();
+   //beat.play();
+   // verse_adlib.play();
+  }
+}
+
+dbutton.onclick = function() {
+   
+  rec.stop();
+
+  
+  rec.exportWAV(function(e){
+    rec.clear();
+    Recorder.forceDownload(e, "test.wav");
+  });
+}
+
+
+function option1(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+   source.disconnect(audioCtx.destination);
+   source.connect(compressor);
+   compressor.connect(audioCtx.destination);
+}
+
+function option2(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+   source.disconnect(audioCtx.destination);
+   source.connect(biquadFilter);
+   biquadFilter.connect(audioCtx.destination);
+}
+
+function option3(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+}
+
+function option4(source){
+   source = audioCtx.createMediaElementSource(mainVerse);
+}
+
+
+function AddNote(ele) {
+    loading++;
+    audios.push(ele);
+    
+    ele.addEventListener("canplaythrough", function () {
+        loading--;
+        if (loading == 0) // All files are preloaded
+            StartPlayingAll();
+        }, false);
+ //   audio.addEventListener('timeupdate', function(){
+   //        var buffer = .44
+     //           if(this.currentTime > this.duration - buffer){
+       //             this.currentTime = 0;
+         //           this.play();
+           //     }}, false);
+
+}
+
+function StartPlayingAll() {
+    // audio[3].muted = !audios[3].muted;
+    // audio[4].muted = !audios[3].muted;
+
+    
+    for (var i = 0; i < audios.length; i++){
+        audios[i].play();
+    }
+   
+    loading = 0;
+
+}
+  </script>
+
+</html>
